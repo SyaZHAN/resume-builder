@@ -175,7 +175,7 @@ For each JD, score the resume against each dimension on a 0–5 scale:
 - User's experience exceeds the requirement by 2+ years (over-qualify risk) → flag but don't penalize score
 - "Plus" requirements met → +2% each
 - "Plus" requirements not met → no penalty
-- "Must Have" requirements missed → automatic score ceiling at 60%
+- "Must Have" requirements missed → automatic score ceiling at 60% (which also locks the JD out of the 重点投递 tier in Step 4 — intentional: a missing hard requirement should never be recommended as a top pick)
 
 ### Step 4: Generate Comparison Table
 
@@ -189,6 +189,21 @@ Produce a summary comparison table with these columns:
 - Key hits (top 2-3 aligned skills)
 - Key gaps / risks
 - Recommendation (重点投递 / 保底 / 可投 / 不投)
+
+**Recommendation tier thresholds** (fixed defaults, applied identically for every user):
+
+| Tier | Final score | Meaning |
+|---|---|---|
+| 重点投递 ⭐ | ≥ 75% | Strong match — worth a tailored greeting message (Step 5) |
+| 可投 | 60–74% | Viable — apply with the generic resume; don't over-invest |
+| 保底 | 45–59% | Safety net — only if the batch is thin or the user is in a hurry to get offers |
+| 不投 | < 45% | Mismatch — listed with reason, not deleted |
+
+**Tiering rules**:
+- Tiers use the **absolute thresholds above as primary** standard. A batch-relative adjustment is allowed only to demote, never to inflate (e.g. a 62% in a batch full of 80%+ jobs may be noted "本批相对偏弱", but stays 可投)
+- A JD with any unmet **Must Have** is capped at 60% (Step 3), so it can never land in 重点投递 — by design
+- `面议` salary does not affect tiering (no parsed range → no anchor comparison, no deduction)
+- When a user's tier boundaries produce an empty 重点投递 tier, state it plainly ("本批无重点投递，最高 68%") rather than stretching thresholds to manufacture one
 
 Sort by: match score descending, then parsed salary max descending (numeric values only — never the raw string), then salary min.
 
