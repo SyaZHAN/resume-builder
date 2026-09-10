@@ -18,18 +18,24 @@ Activate this skill when the user mentions any of the following:
 - **Implicit**: providing a job description with scoring expectations, pasting a batch of JD JSON from a browser extension, asking "should I apply for this"
 - **Context**: the user is in a job search context and has shared their resume or is about to
 
-## Prerequisites Check
+## Prerequisites Check (Cold-Start Design)
 
-At the start of every session, check and establish the following. Ask when missing, skip when already known:
+A user may drop JD JSON with zero prior conversation. The skill must run from that state: **check dependencies, ask only for what is missing, one round, then proceed.** Users never need to prepare a "target direction" in advance — the JD batch itself defines it, and aggregate analysis helps them discover one.
 
-1. **Resume source** — Does a resume file exist? Has it been structured into a baseline library? (Accept: `.md`, `.docx`, `.pdf`, pasted text, or structured baseline file)
-2. **Target role** — What position/industry is the user targeting? (e.g. "AI Product Manager", "Frontend Engineer")
-3. **Experience level** — Junior / Mid / Senior / Lead? (Affects how JD requirements are weighted)
-4. **Salary anchor** — What is their current/previous salary? (Critical for "should I apply" decisions)
-5. **Target city & location flexibility** — Which city are they job-hunting in, and are remote jobs or other cities acceptable? (Feeds the Step 2.5 location filter)
-6. **Target companies** — Big tech, growth-stage, startups, or all? (Affects matching criteria strictness)
+**Dependency tiers**:
 
-**Key rule**: Users may not know their exact level or target — treat "uncertain" as valid and help calibrate through actual JD analysis.
+| Tier | Item | If missing | Resolution |
+|---|---|---|---|
+| 🔴 Hard | **Resume baseline** | Scoring has no "candidate side" — analysis impossible | Ask for a resume file/paste; if none exists, launch Step 0 interview to build one |
+| 🔴 Hard | **Salary anchor** | Pay-cut pre-filter and score adjustments fail | Ask in one sentence ("期望或目前月薪大概多少?"). For fresh grads / career switchers who can't answer: fall back to market rate research for the target role + city, and mark it as a market-derived anchor |
+| 🟡 Semi | **Target city** | Location pre-filter inactive | Optional — do NOT block on it. If absent, skip the location filter and explicitly note "未做城市过滤" in the output |
+| 🟢 Auto | **Experience level** | Weighting affected | Never ask — infer from resume work years (≤2 junior / 2–5 mid / 5+ senior). State the inferred level in output so the user can correct it |
+| 🟢 Optional | **Target role / companies** | No impact on per-JD analysis; batch insights dilute if mixed | Don't ask up front. Let the JD batch define direction; optionally note when a batch mixes unrelated role families |
+
+**Key rules**:
+- Ask when missing, skip when already known; batch all missing questions into ONE round, never a drip of questions
+- "Uncertain" is always a valid answer — calibrate through actual JD analysis
+- Every fallback (market-rate anchor, no city filter) must be stated explicitly in the output, never silently applied
 
 ## The Four-Dimensional Framework
 
@@ -42,10 +48,10 @@ Every JD and every resume is decomposed into these four dimensions:
 | **Domain Experience** | 25% | Industry knowledge, business context, relevant past roles/companies |
 | **Project Outcomes** | 20% | Quantifiable achievements (GMV, DAU, revenue, users, efficiency gains) |
 
-**Weight adjustment rules**:
+**Weight adjustment rules** (level comes from the resume baseline's inferred experience level, never from asking the user directly):
 
-- For **junior roles**: increase Hard Skills to 40%, decrease Domain to 20%
-- For **senior/lead roles**: increase Domain to 30%, decrease Hard Skills to 30%
+- For **junior candidates** (≤2 years): increase Hard Skills to 40%, decrease Domain to 20%
+- For **senior/lead candidates** (5+ years): increase Domain to 30%, decrease Hard Skills to 30%
 - For **highly specialized roles** (e.g. WMS expert): increase Domain to 40%
 - For **AI/research roles** emphasizing novelty: increase Hard Skills to 40%
 
@@ -107,6 +113,7 @@ If no baseline exists, create one from the user's resume. The baseline serves as
 - Gap analysis
 - Positioning statement
 - Ranked selling points (top 5 for interview context)
+- **Inferred experience level** (from total work years: ≤2 junior / 2–5 mid / 5+ senior) — this drives the Step 3 weighting; state it explicitly so the user can correct it
 
 **After creation**, inform the user and proceed to JD analysis.
 
@@ -215,9 +222,9 @@ Output includes:
 
 ### Salary Calibration
 
-- **Always** ask for the user's current/previous salary as an anchor
+- **Always** ask for the user's current/previous salary as an anchor (one sentence, batched with any other missing hard dependencies — see Prerequisites Check)
 - Flag any JD below their anchor as "降薪" (pay cut) regardless of match score
-- For first-time job seekers or career switchers: use market research for the target role in their city instead
+- For first-time job seekers or career switchers who can't provide an anchor: research the market rate for the target role in their target city and use it as a **market-derived anchor**, explicitly marked as such in the output (never silently blended with self-reported anchors)
 
 ### Employment Gap
 
