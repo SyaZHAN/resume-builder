@@ -26,7 +26,8 @@ At the start of every session, check and establish the following. Ask when missi
 2. **Target role** — What position/industry is the user targeting? (e.g. "AI Product Manager", "Frontend Engineer")
 3. **Experience level** — Junior / Mid / Senior / Lead? (Affects how JD requirements are weighted)
 4. **Salary anchor** — What is their current/previous salary? (Critical for "should I apply" decisions)
-5. **Target companies** — Big tech, growth-stage, startups, or all? (Affects matching criteria strictness)
+5. **Target city & location flexibility** — Which city are they job-hunting in, and are remote jobs or other cities acceptable? (Feeds the Step 2.5 location filter)
+6. **Target companies** — Big tech, growth-stage, startups, or all? (Affects matching criteria strictness)
 
 **Key rule**: Users may not know their exact level or target — treat "uncertain" as valid and help calibrate through actual JD analysis.
 
@@ -115,14 +116,35 @@ For each JD (whether pasted individually or batch-imported from JSON), decompose
 
 **Process**:
 1. Extract company name, job title, salary, location, experience/education requirements
-2. Parse all "responsibilities" and "requirements" sections into bullet points
-3. Map each bullet point to one of the four dimensions
-4. Assign a requirement strength: **Must Have** / **Nice to Have** / **Plus**
+2. **Parse salary into a numeric range** for comparability: `"10-15K"` → min=10, max=15 (K/month); handle `K`/`k`/`千`/`万` units and `·13薪`/`·14薪` annual-package suffixes (record separately); `"面议"` or unparseable → null (never guessed). Parsed values power all sorting and filtering; the original string is always preserved for display
+3. Parse all "responsibilities" and "requirements" sections into bullet points
+4. Map each bullet point to one of the four dimensions
+5. Assign a requirement strength: **Must Have** / **Nice to Have** / **Plus**
 
-**For batch JSON input** (from a browser extension):
-- Validate fields: `jobName`, `company`, `salary`, `fullText` are required
-- Skip records with `complete: false` or empty `fullText`
+**For batch JSON input** (from a browser extension) — use every captured field, not just the core four:
+
+| Field | How it's used |
+|---|---|
+| `url` + `platform` | Carried through to the comparison table so a "投" decision is one click away; identifies which site to return to |
+| `workLocation` / `address` | Feeds the location hard filter in Step 2.5 |
+| `limitText` | Parse experience/education hard thresholds from the tag line |
+| `jobId` / `fingerprint` | Cross-batch dedup: records already analyzed in an earlier batch are skipped, reported as "N 条重复已去除" |
+
+- Full analysis requires `jobName`, `company`, `salary`, `fullText`
+- Records with empty `fullText` or `complete: false` (e.g. 智联 list-page metadata captures) are **NOT discarded**: route them to a **"待补全清单"** shown to the user — "N 条仅元数据，进入详情页重新抓取即可补全分析"（dedup by `jobId`）
 - Flag records where `company` is "未知公司" as incomplete
+
+### Step 2.5: Hard-Threshold Pre-Filter (cheap filter)
+
+Before deep four-dimension scoring, eliminate obviously unqualified JDs at near-zero cost. A JD is filtered out — **with a reason, never silently** — if ANY:
+
+1. **Location mismatch** — work city is outside the user's target city (skip this rule for remote roles or if the user declared location flexibility)
+2. **Salary ceiling below anchor** — parsed salary max < user's anchor → reason "降薪" (even the best case is a pay cut)
+3. **Experience floor out of reach** — required minimum years exceeds the user's actual years by 2+ → reason "经验门槛"
+
+Education requirement above the user's degree is **flagged, not dropped** (sales and many other roles commonly negotiate on this).
+
+Filtered-out JDs appear in a compact "已筛除" list (`公司 · 岗位 · 薪资 · 一行原因`) so the user can rescue any entry (e.g. willing to take a pay cut). Only JDs passing the filter proceed to Step 3.
 
 ### Step 3: Weighted Scoring
 
@@ -141,9 +163,9 @@ For each JD, score the resume against each dimension on a 0–5 scale:
 
 **Additional context factors** (adjust ±2-5%):
 - Salary within range → +2%
-- Salary below anchor → -5% and flag
+- Salary midpoint below anchor but max still reaches it (not caught by the Step 2.5 ceiling filter) → -5% and flag
 - Experience requirement matches → neutral
-- Experience requirement exceeds by 2+ years (over-qualify risk) → flag but don't penalize score
+- User's experience exceeds the requirement by 2+ years (over-qualify risk) → flag but don't penalize score
 - "Plus" requirements met → +2% each
 - "Plus" requirements not met → no penalty
 - "Must Have" requirements missed → automatic score ceiling at 60%
@@ -154,17 +176,25 @@ Produce a summary comparison table with these columns:
 - Priority (⭐ = top picks)
 - Company name
 - Job title
-- Salary
+- Platform + job URL (from the capture record — a "投" decision is one click away)
+- Salary (original string + parsed range; `面议` displayed as-is and sorted last)
 - Match score
 - Key hits (top 2-3 aligned skills)
 - Key gaps / risks
 - Recommendation (重点投递 / 保底 / 可投 / 不投)
 
-Sort by: match score descending, then salary descending.
+Sort by: match score descending, then parsed salary max descending (numeric values only — never the raw string), then salary min.
 
 Render the table as both:
 1. An inline HTML widget (for immediate viewing)
 2. A CSV file saved to the working directory (`jd-matcher/comparison-{date}.csv`) encoded in UTF-8 with BOM for Excel compatibility
+
+**Aggregate gap analysis** (when ≥5 JDs are analyzed): after the table, summarize across the whole batch:
+- Top 5 most-demanded requirements with frequency (e.g. "私域/微信运营 78%"), split into what the user already covers vs. misses
+- The user's 2 biggest recurring gaps + the single highest-ROI skill to build next
+- Salary benchmark: median and range of the batch vs. the user's anchor
+
+**Hand-off to Step 5**: end the analysis with a proactive offer — "要对 Top 3 分别生成定制话术吗？" (one confirmation, then batch-generate).
 
 ### Step 5: Customized Resume Talking Points (On Request)
 
@@ -205,12 +235,13 @@ When matching a candidate to a JD in a different industry:
 
 ### Browser Extension Integration
 
-This skill is designed to work alongside a companion browser extension that scrapes JDs from BOSS Zhipin. When the user provides a batch JSON file:
+This skill is designed to work alongside a companion browser extension that scrapes JDs from **BOSS直聘 and 智联招聘** (detail pages on both platforms; list pages produce metadata-only records). When the user provides a batch JSON file:
 
-- Parse and validate all records
-- Present a one-sentence summary: "Found N valid JDs out of M total"
-- Proceed with analysis for all valid records
-- Note any scraping issues (e.g., missing company names, encoded salary icons) and suggest fixes
+- Parse and validate all records; dedup across batches by `jobId`/`fingerprint`
+- Present a one-sentence summary: "M 条中 N 条可分析，X 条待补全（列表元数据），Y 条重复已去除"
+- Metadata-only records route to the pending list (Step 2), not the trash
+- Proceed with analysis for all fully-captured records
+- Note any scraping issues (e.g. missing company names, encoded salary icons) and suggest fixes
 
 ## Output Quality Standards
 
