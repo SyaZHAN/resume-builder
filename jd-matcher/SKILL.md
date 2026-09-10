@@ -141,6 +141,13 @@ For each JD (whether pasted individually or batch-imported from JSON), decompose
 - Records with empty `fullText` or `complete: false` (e.g. 智联 list-page metadata captures) are **NOT discarded**: route them to a **"待补全清单"** shown to the user — "N 条仅元数据，进入详情页重新抓取即可补全分析"（dedup by `jobId`）
 - Flag records where `company` is "未知公司" as incomplete
 
+**Pending-list lifecycle** (待补全清单):
+
+- Persisted in the working directory (`jd-matcher/pending-jds.md`) so it survives across batches; entries carry `jobId`, `url`, `platform`, `capturedAt`, and first-seen date
+- **Freshness check on arrival**: when a new batch comes in, entries older than 7 days are marked `可能已下线` — stale entries stay visible (user may still check the URL manually) but are sorted to the bottom
+- **Fulfillment**: when a detail-page capture arrives with a matching `jobId`, merge (detail fullText replaces metadata), remove from the pending list, and score it in the current batch
+- **Closure**: entries are only removed by (a) fulfillment or (b) explicit user dismissal — never auto-deleted; if the target job page 404s during a user-initiated check, mark `已下线` and move to a closed section
+
 ### Step 2.5: Hard-Threshold Pre-Filter (cheap filter)
 
 Before deep four-dimension scoring, eliminate obviously unqualified JDs at near-zero cost. A JD is filtered out — **with a reason, never silently** — if ANY:
@@ -196,6 +203,8 @@ Produce a summary comparison table with these columns:
 - Key hits (top 2-3 aligned skills)
 - Key gaps / risks
 - Recommendation (重点投递 / 保底 / 可投 / 不投)
+
+**Score explainability (batch mode)**: the table's "Key hits / Key gaps" columns ARE the per-JD explanation — each must be traceable to the per-requirement pass from Step 3 (a hit cites the requirement it matches; a gap cites the requirement it misses). Additionally, for every JD, emit one line of dimension-score rationale: `硬技能2分(CRM/SaaS工具空白) 软技能5分(7年客诉谈判) …` — no score may appear without a reason. If a user challenges a score, expand the full per-requirement evidence for that JD on request (deep-dive format, no re-run needed).
 
 **Recommendation tier thresholds** (fixed defaults, applied identically for every user):
 
