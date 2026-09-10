@@ -166,6 +166,13 @@ For each JD, score the resume against each dimension on a 0–5 scale:
 | 1 | Minimal match — requires significant new learning |
 | 0 | No match — completely different domain or skill set |
 
+**Scoring granularity (two-level design)**:
+
+- **Batch mode (default, Step 3–4)**: dimension-level scores — one score per dimension per JD. To keep them grounded, derive each dimension score from a quick per-requirement pass (`requirement → 命中/部分命中/未命中`) against the baseline, then aggregate to the 0–5 dimension score. Do NOT show the per-requirement detail in batch output — it belongs to the per-JD deep dive (Step 5)
+- **Deep-dive mode (Step 5 prerequisite)**: for JDs the user decides to apply to, expand the full per-requirement hit table — every requirement with 命中/部分/未命中 + the baseline evidence behind each verdict. This powers talking points and interview prep
+
+Rationale: batch tables need ranking stability and compact output (dimension level); application decisions need actionable specifics (per-requirement level). A single misjudged requirement shouldn't flip a batch ranking, but it must be visible before the user walks into an interview.
+
 **Weighted total**: `(Hard×0.35 + Soft×0.20 + Domain×0.25 + Outcome×0.20) / 5 × 100%`
 
 **Additional context factors** (adjust ±2-5%):
@@ -222,8 +229,18 @@ Render the table as both:
 
 When the user wants to apply for a specific JD, generate a tailored "resume lens" that reframes their existing experience in the JD's language. **Never fabricate experience** — only reorganize and re-contextualize real facts.
 
+**Prerequisite — per-requirement hit table (deep-dive mode, from Step 3's two-level design)**: before writing any talking point, produce the full per-requirement breakdown for this JD:
+
+| Requirement (verbatim or compressed) | Strength | Verdict | Baseline evidence |
+|---|---|---|---|
+| e.g. "3年以上B端销售经验" | Must | ✅ 命中 | 7年旅游销售，客户开发+成交全流程 |
+| e.g. "熟悉CRM工具" | Must | ❌ 未命中 | 无CRM使用记录 → 需话术侧写"客户管理系统化"经验 |
+
+Rules: every verdict cites baseline evidence (or explicitly says "无证据"); unmet Musts get a mitigation line; 部分命中 states what transfers and what doesn't. This table is the factual floor everything below stands on.
+
 Output includes:
-- Requirement → Selling Point mapping table
+- Per-requirement hit table (above) — the first output, before any writing
+- Requirement → Selling Point mapping table (for 命中/部分命中 items only; unmet items map to honest mitigation, not fabrication)
 - Rewritten summary for resume header
 - Experience descriptions rewritten in JD language
 - BOSS Zhipin / LinkedIn greeting message (≤120 chars)
@@ -231,6 +248,7 @@ Output includes:
   - Employment gap explanation
   - Cross-industry pivot justification
   - Salary expectation response
+  - **Defense lines for every unmet Must / weak verdict** in the hit table (interviewers probe exactly there)
 - Honesty boundary note: which statements are re-framed vs. which might need interview nuance
 
 ## Special Handling
